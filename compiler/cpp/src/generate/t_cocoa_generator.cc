@@ -57,6 +57,9 @@ public:
     iter = parsed_options.find("validate_required");
     validate_required_ = (iter != parsed_options.end());
 
+    iter = parsed_options.find("modern");
+    modern_ = (iter != parsed_options.end());
+
     out_dir_base_ = "gen-cocoa";
   }
 
@@ -210,6 +213,7 @@ private:
 
   bool log_unexpected_;
   bool validate_required_;
+  bool modern_;
 };
 
 /**
@@ -452,12 +456,17 @@ void t_cocoa_generator::generate_cocoa_struct_interface(ofstream& out,
 
   // properties
   if (members.size() > 0) {
-    out << "#if TARGET_OS_IPHONE || (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)"
-        << endl;
+    if (!modern_) {
+      out << "#if TARGET_OS_IPHONE || (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)"
+          << endl;
+    }
     for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
       out << indent() << declare_property(*m_iter) << endl;
     }
-    out << "#endif" << endl << endl;
+    if (!modern_) {
+      out << "#endif" << endl;
+    }
+    out << endl;
   }
 
   // default initializer
@@ -693,8 +702,10 @@ void t_cocoa_generator::generate_cocoa_struct_implementation(ofstream& out,
     scope_up(out);
     indent(out) << "self = [super init];" << endl;
     if (members.size() > 0) {
-      out << "#if TARGET_OS_IPHONE || (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)"
-          << endl;
+      if (!modern_) {
+        out << "#if TARGET_OS_IPHONE || (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)"
+            << endl;
+      }
       for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
         t_type* t = get_true_type((*m_iter)->get_type());
         if ((*m_iter)->get_value() != NULL) {
@@ -706,7 +717,9 @@ void t_cocoa_generator::generate_cocoa_struct_implementation(ofstream& out,
                             true);
         }
       }
-      out << "#endif" << endl;
+      if (!modern_) {
+        out << "#endif" << endl;
+      }
     }
     indent(out) << "return self;" << endl;
     scope_down(out);
@@ -2449,13 +2462,21 @@ string t_cocoa_generator::declare_field(t_field* tfield) {
  */
 string t_cocoa_generator::declare_property(t_field* tfield) {
   std::ostringstream render;
-  render << "@property (nonatomic, ";
+  render << "@property (nonatomic";
 
-  if (type_can_be_null(tfield->get_type()))
-    render << "retain, ";
+  if (type_can_be_null(tfield->get_type())) {
+    render << ", retain";
+  } else {
+    render << ", assign";
+  }
 
-  render << "getter=" << decapitalize(tfield->get_name()) << ", setter=set"
-         << capitalize(tfield->get_name()) + ":) " << type_name(tfield->get_type()) << " "
+  if (!modern_) {
+    render << ", getter=" << decapitalize(tfield->get_name())
+      << ", setter=set" << capitalize(tfield->get_name()) + ":";
+  }
+
+  render << ") ";
+  render << type_name(tfield->get_type()) << " "
          << tfield->get_name() << ";";
 
   return render.str();
@@ -2595,4 +2616,5 @@ THRIFT_REGISTER_GENERATOR(
     "Cocoa",
     "    log_unexpected:  Log every time an unexpected field ID or type is encountered.\n"
     "    validate_required:\n"
-    "                     Throws exception if any required field is not set.\n")
+    "                     Throws exception if any required field is not set.\n"
+    "    modern:          Produce modern Objective-C output.\n")
