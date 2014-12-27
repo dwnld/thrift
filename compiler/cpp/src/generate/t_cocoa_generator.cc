@@ -722,8 +722,7 @@ void t_cocoa_generator::generate_cocoa_struct_copy_with_zone_method(ofstream& ou
 /**
  * Generate the hash method for this struct
  */
-void t_cocoa_generator::generate_cocoa_struct_hash_method(ofstream& out,
-                                                          t_struct* tstruct) {
+void t_cocoa_generator::generate_cocoa_struct_hash_method(ofstream& out, t_struct* tstruct) {
   indent(out) << "- (NSUInteger) hash" << endl;
   scope_up(out);
   out << indent() << "NSUInteger hash = 17;" << endl;
@@ -738,11 +737,10 @@ void t_cocoa_generator::generate_cocoa_struct_hash_method(ofstream& out,
     out << indent() << "if (__" << (*m_iter)->get_name() << "_isset)" << endl;
     scope_up(out);
     if (type_can_be_null(t)) {
-      out << indent() << "hash = (hash * 31) ^ [__"
-          << (*m_iter)->get_name() << " hash];" << endl;
+      out << indent() << "hash = (hash * 31) ^ [__" << (*m_iter)->get_name() << " hash];" << endl;
     } else {
-      out << indent() << "hash = (hash * 31) ^ [@(__"
-          << (*m_iter)->get_name() << ") hash];" << endl;
+      out << indent() << "hash = (hash * 31) ^ [@(__" << (*m_iter)->get_name() << ") hash];"
+          << endl;
     }
     scope_down(out);
   }
@@ -755,8 +753,7 @@ void t_cocoa_generator::generate_cocoa_struct_hash_method(ofstream& out,
 /**
  * Generate the isEqual method for this struct
  */
-void t_cocoa_generator::generate_cocoa_struct_is_equal_method(ofstream& out,
-                                                              t_struct* tstruct) {
+void t_cocoa_generator::generate_cocoa_struct_is_equal_method(ofstream& out, t_struct* tstruct) {
   indent(out) << "- (BOOL) isEqual: (id) anObject" << endl;
   scope_up(out);
 
@@ -783,14 +780,14 @@ void t_cocoa_generator::generate_cocoa_struct_is_equal_method(ofstream& out,
     t_type* t = get_true_type((*m_iter)->get_type());
     string name = (*m_iter)->get_name();
     if (type_can_be_null(t)) {
-      out << indent() << "if ((__" << name << "_isset != other->__" << name << "_isset) ||"
-          << endl << indent() << "    "
+      out << indent() << "if ((__" << name << "_isset != other->__" << name << "_isset) ||" << endl
+          << indent() << "    "
           << "(__" << name << "_isset && "
           << "((__" << name << " || other->__" << name << ") && "
           << "![__" << name << " isEqual:other->__" << name << "]))) {" << endl;
     } else {
-      out << indent() << "if ((__" << name << "_isset != other->__" << name << "_isset) ||"
-          << endl << indent() << "    "
+      out << indent() << "if ((__" << name << "_isset != other->__" << name << "_isset) ||" << endl
+          << indent() << "    "
           << "(__" << name << "_isset && "
           << "(__" << name << " != other->__" << name << "))) {" << endl;
     }
