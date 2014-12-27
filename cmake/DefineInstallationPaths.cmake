@@ -1,5 +1,4 @@
-#!/bin/sh
-
+#
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements. See the NOTICE file
 # distributed with this work for additional information
@@ -16,14 +15,12 @@
 # KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations
 # under the License.
+#
 
 
-# Mainly aiming Travis CI's Ubuntu machines for now
-# see what we need: http://thrift.apache.org/docs/install/ubuntu
-
-# General dependencies
-sudo apt-add-repository "deb http://archive.ubuntu.com/ubuntu/ trusty main restricted" -y
-sudo apt-get update -qq
-
-sudo apt-get install -qq libpango-1.0-0 libqt4-dev qtbase5-dev qtbase5-dev-tools qt5-default libboost-dev libboost-test-dev libboost-program-options-dev libboost-system-dev libboost-filesystem-dev libboost-thread-dev libevent-dev automake libtool flex bison pkg-config g++ libssl-dev make cmake git debhelper bc nsis ninja-build
-dpkg -S /usr/include/boost/version.hpp
+# Define the default install paths
+set(BIN_INSTALL_DIR "bin" CACHE PATH "The binary install dir (default: bin)")
+set(LIB_INSTALL_DIR "lib${LIB_SUFFIX}" CACHE PATH "The library install dir (default: lib${LIB_SUFFIX})")
+set(INCLUDE_INSTALL_DIR "include" CACHE PATH "The library install dir (default: include)")
+set(CMAKE_INSTALL_DIR "cmake" CACHE PATH "The subdirectory to install cmake config files (default: cmake)")
+set(DOC_INSTALL_DIR "share/doc" CACHE PATH "The subdirectory to install documentation files (default: share/doc)")

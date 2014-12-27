@@ -1,5 +1,4 @@
-#!/bin/sh
-
+#
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements. See the NOTICE file
 # distributed with this work for additional information
@@ -16,14 +15,16 @@
 # KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations
 # under the License.
+#
 
 
-# Mainly aiming Travis CI's Ubuntu machines for now
-# see what we need: http://thrift.apache.org/docs/install/ubuntu
+#  Ant_FOUND - system has Ant
+#  Ant_EXECUTBALE - the Ant executable
+#
+# It will search the environment variable ANT_HOME if it is set
 
-# General dependencies
-sudo apt-add-repository "deb http://archive.ubuntu.com/ubuntu/ trusty main restricted" -y
-sudo apt-get update -qq
+include(FindPackageHandleStandardArgs)
 
-sudo apt-get install -qq libpango-1.0-0 libqt4-dev qtbase5-dev qtbase5-dev-tools qt5-default libboost-dev libboost-test-dev libboost-program-options-dev libboost-system-dev libboost-filesystem-dev libboost-thread-dev libevent-dev automake libtool flex bison pkg-config g++ libssl-dev make cmake git debhelper bc nsis ninja-build
-dpkg -S /usr/include/boost/version.hpp
+find_program(Ant_EXECUTABLE NAMES ant PATHS $ENV{ANT_HOME}/bin)
+find_package_handle_standard_args(Ant DEFAULT_MSG Ant_EXECUTABLE)
+mark_as_advanced(Ant_EXECUTABLE)
