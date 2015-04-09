@@ -23,23 +23,26 @@
     "url": "https://issues.apache.org/jira/browse/THRIFT"
   },
   "directories": {
-    "lib": "./lib/thrift"
+    "lib": "./lib/nodejs/lib/thrift"
   },
-  "main": "./lib/thrift",
+  "main": "./lib/nodejs/lib/thrift",
   "engines": {
     "node": ">= 0.2.4"
   },
   "dependencies": {
     "node-int64": "~0.3.0",
     "q": "1.0.x",
-    "nodeunit": "~0.8.0",
     "ws": "~0.4.32"
   },
   "devDependencies": {
+    "commander": "2.1.x",
     "connect": "2.7.x",
-    "commander": "2.1.x"
+    "istanbul": "^0.3.5",
+    "run-browser": "^2.0.1",
+    "tape": "~3.5.0"
   },
   "scripts": {
-    "test": "test/testAll.sh"
+    "cover": "lib/nodejs/test/testAll.sh COVER",
+    "test": "lib/nodejs/test/testAll.sh"
   }
 }

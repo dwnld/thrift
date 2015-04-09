@@ -167,6 +167,40 @@ namespace Test
             transport.Close();
         }
 
+        public static string BytesToHex(byte[] data) {
+            return BitConverter.ToString(data).Replace("-", string.Empty);
+        }
+
+        public static byte[] PrepareTestData(bool randomDist)
+        {
+            byte[] retval = new byte[0x100];
+            int initLen = Math.Min(0x100,retval.Length);
+
+            // linear distribution, unless random is requested
+            if (!randomDist) {
+                for (var i = 0; i < initLen; ++i) { 
+                    retval[i] = (byte)i;
+                }
+                return retval;
+            }
+
+            // random distribution
+            for (var i = 0; i < initLen; ++i) { 
+                retval[i] = (byte)0;
+            }
+            var rnd = new Random();
+            for (var i = 1; i < initLen; ++i) {
+                while( true) {
+                    int nextPos = rnd.Next() % initLen;
+                    if (retval[nextPos] == 0) {
+                        retval[nextPos] = (byte)i;
+                        break;
+                    }
+                }
+            }
+            return retval;
+        }
+
         public static void ClientTest(TTransport transport)
         {
             TProtocol proto;
@@ -216,6 +250,36 @@ namespace Test
             Console.Write("testDouble(5.325098235)");
             double dub = client.testDouble(5.325098235);
             Console.WriteLine(" = " + dub);
+
+            byte[] binOut = PrepareTestData(true);
+            Console.Write("testBinary(" + BytesToHex(binOut) + ")");
+            try
+            {
+                byte[] binIn = client.testBinary(binOut);
+                Console.WriteLine(" = " + BytesToHex(binIn));
+                if (binIn.Length != binOut.Length)
+                    throw new Exception("testBinary: length mismatch");
+                for (int ofs = 0; ofs < Math.Min(binIn.Length, binOut.Length); ++ofs)
+                    if (binIn[ofs] != binOut[ofs])
+                        throw new Exception("testBinary: content mismatch at offset " + ofs.ToString());
+            }
+            catch (Thrift.TApplicationException e) 
+            {
+                Console.Write("testBinary(" + BytesToHex(binOut) + "): "+e.Message);
+            }
+
+            // binary equals? only with hashcode option enabled ...
+            if( typeof(CrazyNesting).GetMethod("Equals").DeclaringType == typeof(CrazyNesting)) 
+            {
+                CrazyNesting one = new CrazyNesting();
+                CrazyNesting two = new CrazyNesting();
+                one.String_field = "crazy";
+                two.String_field = "crazy";
+                one.Binary_field = new byte[10] { 0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0xFF };
+                two.Binary_field = new byte[10] { 0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0xFF };
+                if (!one.Equals(two))
+                    throw new Exception("CrazyNesting.Equals failed");
+            }
 
             Console.Write("testStruct({\"Zero\", 1, -3, -5})");
             Xtruct o = new Xtruct();

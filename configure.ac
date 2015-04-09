@@ -132,7 +132,7 @@ fi
 AX_THRIFT_LIB(cpp, [C++], yes)
 have_cpp=no
 if test "$with_cpp" = "yes";  then
-  AX_BOOST_BASE([1.54.0])
+  AX_BOOST_BASE([1.53.0])
   if test "x$succeeded" = "xyes" ; then
     AC_SUBST([BOOST_LIB_DIR], [$(echo "$BOOST_LDFLAGS" | sed -e 's/^\-L//')])
     AC_SUBST([BOOST_TEST_LDADD], [$(echo "$BOOST_LIB_DIR/libboost_unit_test_framework.a")])
@@ -246,9 +246,10 @@ AM_CONDITIONAL(HAVE_NPM, [test "x$NPM" != "x"])
 AX_THRIFT_LIB(lua, [Lua], yes)
 have_lua=no
 if test "$with_lua" = "yes"; then
-  AC_PATH_PROGS([LUA], [lua])
-  if test "x$LUA" != "x"; then
-    have_lua="yes"
+  AX_PROG_LUA(5.2,, have_lua="yes", have_lua="no")
+  if test "$have_lua" = "yes"; then
+    AX_LUA_HEADERS(, have_lua="no")
+    AX_LUA_LIBS(, have_lua="no")
   fi
 fi
 AM_CONDITIONAL(WITH_LUA, [test "$have_lua" = "yes"])
@@ -349,7 +350,7 @@ AX_THRIFT_LIB(haxe, [Haxe], yes)
 if test "$with_haxe" = "yes";  then
   AC_PATH_PROG([HAXE], [haxe])
   if [[ -x "$HAXE" ]] ; then
-    have_haxe="yes"
+    AX_PROG_HAXE_VERSION( [3.1.3], have_haxe="yes", have_haxe="no")
   fi
 fi
 AM_CONDITIONAL(WITH_HAXE, [test "$have_haxe" = "yes"])
@@ -765,6 +766,7 @@ if test "$have_python" = "yes" ; then
   echo
   echo "Python Library:"
   echo "   Using Python .............. : $PYTHON"
+  echo "   Using Trial ............... : $TRIAL"
 fi
 if test "$have_php" = "yes" ; then
   echo
@@ -786,6 +788,7 @@ if test "$have_haxe" = "yes" ; then
   echo
   echo "Haxe Library:"
   echo "   Using Haxe ................ : $HAXE"
+  echo "   Using Haxe version ........ : $HAXE_VERSION"
 fi
 if test "$have_perl" = "yes" ; then
   echo

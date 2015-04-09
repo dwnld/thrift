@@ -17,7 +17,7 @@
 %% under the License.
 %%
 
--module(test_server).
+-module(test_thrift_server).
 
 -export([go/0, go/1, start_link/2, handle_function/2]).
 
@@ -52,7 +52,7 @@ go(Args) ->
 
 start_link(Port, ServerOpts) ->
     thrift_socket_server:start([{handler, ?MODULE},
-                                {service, thriftTest_thrift},
+                                {service, thrift_test_thrift},
                                 {port, Port}] ++
                                ServerOpts).
 
@@ -80,6 +80,10 @@ handle_function(testI64, {I64}) when is_integer(I64) ->
 handle_function(testDouble, {Double}) when is_float(Double) ->
     io:format("testDouble: ~p~n", [Double]),
     {reply, Double};
+
+handle_function(testBinary, {S}) when is_binary(S) ->
+    io:format("testBinary: ~p~n", [S]),
+    {reply, S};
 
 handle_function(testStruct,
                 {Struct = #'Xtruct'{string_thing = String,

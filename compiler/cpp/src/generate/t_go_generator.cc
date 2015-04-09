@@ -132,6 +132,10 @@ public:
                               t_struct* tstruct,
                               const string& tstruct_name,
                               bool is_result = false);
+  void generate_countsetfields_helper(std::ofstream& out,
+                              t_struct* tstruct,
+                              const string& tstruct_name,
+                              bool is_result = false);
   void generate_go_struct_reader(std::ofstream& out,
                                  t_struct* tstruct,
                                  const string& tstruct_name,
@@ -139,7 +143,8 @@ public:
   void generate_go_struct_writer(std::ofstream& out,
                                  t_struct* tstruct,
                                  const string& tstruct_name,
-                                 bool is_result = false);
+                                 bool is_result = false,
+                                 bool uses_countsetfields = false);
   void generate_go_function_helpers(t_function* tfunction);
   void get_publicized_name_and_def_value(t_field* tfield,
                                          string* OUT_pub_name,
@@ -167,7 +172,8 @@ public:
                                   bool inclass = false,
                                   bool coerceData = false,
                                   bool inkey = false,
-                                  bool in_container = false);
+                                  bool in_container = false,
+                                  bool use_true_type = false);
 
   void generate_deserialize_struct(std::ofstream& out,
                                    t_struct* tstruct,
@@ -1091,10 +1097,15 @@ void t_go_generator::generate_go_struct_definition(ofstream& out,
   // don't have thrift_spec.
   indent_up();
 
+  int num_setable = 0;
   if (sorted_members.empty() || (sorted_members[0]->get_key() >= 0)) {
     int sorted_keys_pos = 0;
 
     for (m_iter = sorted_members.begin(); m_iter != sorted_members.end(); ++m_iter) {
+      // Set field to optional if field is union, this is so we can get a
+      // pointer to the field.
+      if (tstruct->is_union())
+        (*m_iter)->set_req(t_field::T_OPTIONAL);
       if (sorted_keys_pos != (*m_iter)->get_key()) {
         int first_unused = std::max(1, sorted_keys_pos++);
         while (sorted_keys_pos != (*m_iter)->get_key()) {
@@ -1165,6 +1176,7 @@ void t_go_generator::generate_go_struct_definition(ofstream& out,
       out << indent() << "  }" << endl;
       out << indent() << "return " << maybepointer << "p." << publicized_name << endl;
       out << indent() << "}" << endl;
+      num_setable += 1;
     } else {
       out << endl;
       out << indent() << "func (p *" << tstruct_name << ") Get" << publicized_name << "() "
@@ -1174,9 +1186,14 @@ void t_go_generator::generate_go_struct_definition(ofstream& out,
     }
   }
 
+
+  if (tstruct->is_union() && num_setable > 0) {
+    generate_countsetfields_helper(out, tstruct, tstruct_name, is_result);
+  }
+
   generate_isset_helpers(out, tstruct, tstruct_name, is_result);
   generate_go_struct_reader(out, tstruct, tstruct_name, is_result);
-  generate_go_struct_writer(out, tstruct, tstruct_name, is_result);
+  generate_go_struct_writer(out, tstruct, tstruct_name, is_result, num_setable > 0);
 
   out << indent() << "func (p *" << tstruct_name << ") String() string {" << endl;
   out << indent() << "  if p == nil {" << endl;
@@ -1234,6 +1251,46 @@ void t_go_generator::generate_isset_helpers(ofstream& out,
 }
 
 /**
+ * Generates the CountSetFields helper method for a struct
+ */
+void t_go_generator::generate_countsetfields_helper(ofstream& out,
+                                            t_struct* tstruct,
+                                            const string& tstruct_name,
+                                            bool is_result) {
+  (void)is_result;
+  const vector<t_field*>& fields = tstruct->get_members();
+  vector<t_field*>::const_iterator f_iter;
+  const string escaped_tstruct_name(escape_string(tstruct->get_name()));
+
+  out << indent() << "func (p *" << tstruct_name << ") CountSetFields" << tstruct_name
+      << "() int {"
+      << endl;
+  indent_up();
+  out << indent() << "count := 0" << endl;
+  for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
+    if ((*f_iter)->get_req() == t_field::T_REQUIRED)
+      continue;
+
+    if (!is_pointer_field(*f_iter))
+      continue;
+
+    const string field_name(
+        publicize(variable_name_to_go_name(escape_string((*f_iter)->get_name()))));
+
+    out << indent() << "if (p.IsSet" << field_name << "()) {" << endl;
+    indent_up();
+    out << indent() << "count++" << endl;
+    indent_down();
+    out << indent() << "}" << endl;
+  }
+
+  out << indent() << "return count" << endl << endl;
+  indent_down();
+  out << indent() << "}" << endl << endl;
+}
+
+
+/**
  * Generates the read method for a struct
  */
 void t_go_generator::generate_go_struct_reader(ofstream& out,
@@ -1250,7 +1307,18 @@ void t_go_generator::generate_go_struct_reader(ofstream& out,
   out << indent() << "if _, err := iprot.ReadStructBegin(); err != nil {" << endl;
   out << indent() << "  return thrift.PrependError(fmt.Sprintf(\"%T read error: \", p), err)"
       << endl;
-  out << indent() << "}" << endl;
+  out << indent() << "}" << endl << endl;
+
+  // Required variables does not have IsSet functions, so we need tmp vars to check them.
+  for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
+    if ((*f_iter)->get_req() == t_field::T_REQUIRED) {
+      const string field_name(
+          publicize(variable_name_to_go_name(escape_string((*f_iter)->get_name()))));
+      indent(out) << "var isset" << field_name << " bool = false;" << endl;
+    }
+  }
+  out << endl;
+
   // Loop over reading in fields
   indent(out) << "for {" << endl;
   indent_up();
@@ -1297,6 +1365,14 @@ void t_go_generator::generate_go_struct_reader(ofstream& out,
         << endl;
     out << indent() << "  return err" << endl;
     out << indent() << "}" << endl;
+
+    // Mark required field as read
+    if ((*f_iter)->get_req() == t_field::T_REQUIRED) {
+      const string field_name(
+          publicize(variable_name_to_go_name(escape_string((*f_iter)->get_name()))));
+      out << indent() << "isset" << field_name << " = true" << endl;
+    }
+
     indent_down();
   }
 
@@ -1327,6 +1403,19 @@ void t_go_generator::generate_go_struct_reader(ofstream& out,
   out << indent() << "  return thrift.PrependError(fmt.Sprintf("
                      "\"%T read struct end error: \", p), err)" << endl;
   out << indent() << "}" << endl;
+
+  // Return error if any required fields are missing.
+  for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
+    if ((*f_iter)->get_req() == t_field::T_REQUIRED) {
+      const string field_name(
+          publicize(variable_name_to_go_name(escape_string((*f_iter)->get_name()))));
+      out << indent() << "if !isset" << field_name << "{" << endl;
+      out << indent() << "  return thrift.NewTProtocolExceptionWithType(thrift.INVALID_DATA, "
+                         "fmt.Errorf(\"Required field " << field_name << " is not set\"));" << endl;
+      out << indent() << "}" << endl;
+    }
+  }
+
   out << indent() << "return nil" << endl;
   indent_down();
   out << indent() << "}" << endl << endl;
@@ -1355,13 +1444,20 @@ void t_go_generator::generate_go_struct_reader(ofstream& out,
 void t_go_generator::generate_go_struct_writer(ofstream& out,
                                                t_struct* tstruct,
                                                const string& tstruct_name,
-                                               bool is_result) {
+                                               bool is_result,
+                                               bool uses_countsetfields) {
   (void)is_result;
   string name(tstruct->get_name());
   const vector<t_field*>& fields = tstruct->get_sorted_members();
   vector<t_field*>::const_iterator f_iter;
   indent(out) << "func (p *" << tstruct_name << ") Write(oprot thrift.TProtocol) error {" << endl;
   indent_up();
+  if (tstruct->is_union() && uses_countsetfields) {
+    std::string tstruct_name(publicize(tstruct->get_name()));
+    out << indent() << "if c := p.CountSetFields" << tstruct_name << "(); c != 1 {" << endl
+        << indent() << "  return fmt.Errorf(\"%T write union: exactly one field must be set (%d set).\", p, c)" << endl
+        << indent() << "}" << endl;
+  }
   out << indent() << "if err := oprot.WriteStructBegin(\"" << name << "\"); err != nil {" << endl;
   out << indent() << "  return thrift.PrependError(fmt.Sprintf("
                      "\"%T write struct begin error: \", p), err) }" << endl;
@@ -2548,7 +2644,8 @@ void t_go_generator::generate_deserialize_field(ofstream& out,
                                                 bool inclass,
                                                 bool coerceData,
                                                 bool inkey,
-                                                bool in_container_value) {
+                                                bool in_container_value,
+                                                bool use_true_type) {
   (void)inclass;
   (void)coerceData;
   t_type* orig_type = tfield->get_type();
@@ -2570,8 +2667,12 @@ void t_go_generator::generate_deserialize_field(ofstream& out,
   } else if (type->is_base_type() || type->is_enum()) {
 
     if (declare) {
-      string type_name = inkey ? type_to_go_key_type(tfield->get_type())
-                               : type_to_go_type(tfield->get_type());
+      t_type* actual_type = use_true_type ? tfield->get_type()->get_true_type() 
+                                          : tfield->get_type();
+
+      string type_name = inkey ? type_to_go_key_type(actual_type) 
+                               : type_to_go_type(actual_type);
+
       out << "var " << tfield->get_name() << " " << type_name << endl;
     }
 
@@ -2632,7 +2733,7 @@ void t_go_generator::generate_deserialize_field(ofstream& out,
     out << "} else {" << endl;
     string wrap;
 
-    if (type->is_enum() || orig_type->is_typedef()) {
+    if (type->is_enum() || (orig_type->is_typedef() && !use_true_type)) {
       wrap = publicize(type_name(orig_type));
     } else if (((t_base_type*)type)->get_base() == t_base_type::TYPE_BYTE) {
       wrap = "int8";
@@ -2780,7 +2881,7 @@ void t_go_generator::generate_deserialize_set_element(ofstream& out,
   string elem = tmp("_elem");
   t_field felem(tset->get_elem_type(), elem);
   felem.set_req(t_field::T_OPT_IN_REQ_OUT);
-  generate_deserialize_field(out, &felem, true, "");
+  generate_deserialize_field(out, &felem, true, "", false, false, false, true, true);
   indent(out) << prefix << "[" << elem << "] = true" << endl;
 }
 
@@ -2795,7 +2896,7 @@ void t_go_generator::generate_deserialize_list_element(ofstream& out,
   string elem = tmp("_elem");
   t_field felem(((t_list*)tlist)->get_elem_type(), elem);
   felem.set_req(t_field::T_OPT_IN_REQ_OUT);
-  generate_deserialize_field(out, &felem, true, "", false, false, false, true);
+  generate_deserialize_field(out, &felem, true, "", false, false, false, true, true);
   indent(out) << prefix << " = append(" << prefix << ", " << elem << ")" << endl;
 }
 
