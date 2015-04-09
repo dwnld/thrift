@@ -60,6 +60,19 @@ public:
     iter = parsed_options.find("fullcamel");
     fullcamel_style_ = (iter != parsed_options.end());
 
+    iter = parsed_options.find("base_class");
+    if (iter != parsed_options.end()) {
+      base_class_ = (iter->second);
+      base_import_ = base_class_ + ".h";
+    } else {
+      base_class_ = "NSObject";
+    }
+
+    iter = parsed_options.find("base_import");
+    if (iter != parsed_options.end()) {
+      base_import_ = (iter->second);
+    }
+
     out_dir_base_ = "gen-cocoa";
   }
 
@@ -108,6 +121,7 @@ public:
   void generate_cocoa_struct_encode_with_coder_method(ofstream& out,
                                                       t_struct* tstruct,
                                                       bool is_exception);
+  void generate_cocoa_struct_copy_with_zone_method(ofstream& out, t_struct* tstruct);
   void generate_cocoa_struct_hash_method(ofstream& out, t_struct* tstruct);
   void generate_cocoa_struct_is_equal_method(ofstream& out, t_struct* tstruct);
   void generate_cocoa_struct_field_accessor_declarations(std::ofstream& out,
@@ -222,6 +236,8 @@ private:
   bool log_unexpected_;
   bool validate_required_;
   bool fullcamel_style_;
+  std::string base_class_;
+  std::string base_import_;
 };
 
 /**
@@ -277,7 +293,14 @@ string t_cocoa_generator::cocoa_thrift_imports() {
   for (size_t i = 0; i < includes.size(); ++i) {
     result += "#import \"" + includes[i]->get_name() + ".h\"" + "\n";
   }
-  result += "\n";
+  if (includes.size()) {
+    result += "\n";
+  }
+
+  // Include base class
+  if (!base_import_.empty()) {
+    result += "#import \"" + base_import_ + "\"\n" + "\n";
+  }
 
   return result;
 }
@@ -310,7 +333,7 @@ void t_cocoa_generator::generate_typedef(t_typedef* ttypedef) {
  * @param tenum The enumeration
  */
 void t_cocoa_generator::generate_enum(t_enum* tenum) {
-  f_header_ << indent() << "enum " << cocoa_prefix_ << tenum->get_name() << " {" << endl;
+  f_header_ << indent() << "typedef NS_ENUM(int, " << cocoa_prefix_ << tenum->get_name() << ") {" << endl;
   indent_up();
 
   vector<t_enum_value*> constants = tenum->get_constants();
@@ -322,7 +345,7 @@ void t_cocoa_generator::generate_enum(t_enum* tenum) {
     } else {
       f_header_ << "," << endl;
     }
-    f_header_ << indent() << tenum->get_name() << "_" << (*c_iter)->get_name();
+    f_header_ << indent() << cocoa_prefix_ << tenum->get_name() << "_" << (*c_iter)->get_name();
     f_header_ << " = " << (*c_iter)->get_value();
   }
 
@@ -437,9 +460,9 @@ void t_cocoa_generator::generate_cocoa_struct_interface(ofstream& out,
   if (is_exception) {
     out << "NSException ";
   } else {
-    out << "NSObject ";
+    out << base_class_ << " ";
   }
-  out << "<TBase, NSCoding> ";
+  out << "<TBase, NSCoding, NSCopying> ";
 
   scope_up(out);
 
@@ -668,6 +691,40 @@ void t_cocoa_generator::generate_cocoa_struct_encode_with_coder_method(ofstream&
 }
 
 /**
+ * Generate the copyWithZone method for this struct so it's compatible with
+ * the NSCopying protocol
+ */
+void t_cocoa_generator::generate_cocoa_struct_copy_with_zone_method(ofstream& out,
+                                                                    t_struct* tstruct) {
+  indent(out) << "- (id) copyWithZone: (NSZone *) zone" << endl;
+  scope_up(out);
+  out << indent() << cocoa_prefix_ << tstruct->get_name()
+      << " *copy = [[[self class] allocWithZone: zone] init];" << endl;
+
+  const vector<t_field*>& members = tstruct->get_members();
+  vector<t_field*>::const_iterator m_iter;
+
+  for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
+    t_type* t = get_true_type((*m_iter)->get_type());
+    out << indent() << "if (__" << (*m_iter)->get_name() << "_isset)" << endl;
+    scope_up(out);
+    if (type_can_be_null(t)) {
+      out << indent() << "copy->__" << (*m_iter)->get_name()
+          << " = [__" << (*m_iter)->get_name() << " copyWithZone:zone];" << endl;
+    } else {
+      out << indent() << "copy->__" << (*m_iter)->get_name()
+          << " = __" << (*m_iter)->get_name() << ";" << endl;
+    }
+    out << indent() << "copy->__" << (*m_iter)->get_name() << "_isset = YES;" << endl;
+    scope_down(out);
+  }
+
+  out << indent() << "return copy;" << endl;
+  scope_down(out);
+  out << endl;
+}
+
+/**
  * Generate the hash method for this struct
  */
 void t_cocoa_generator::generate_cocoa_struct_hash_method(ofstream& out, t_struct* tstruct) {
@@ -841,6 +898,8 @@ void t_cocoa_generator::generate_cocoa_struct_implementation(ofstream& out,
   generate_cocoa_struct_init_with_coder_method(out, tstruct, is_exception);
   // encodeWithCoder for NSCoding
   generate_cocoa_struct_encode_with_coder_method(out, tstruct, is_exception);
+  // copyWithZone for NSCopying
+  generate_cocoa_struct_copy_with_zone_method(out, tstruct);
   // hash and isEqual for NSObject
   generate_cocoa_struct_hash_method(out, tstruct);
   generate_cocoa_struct_is_equal_method(out, tstruct);
@@ -2285,7 +2344,7 @@ string t_cocoa_generator::type_name(t_type* ttype, bool class_ref) {
   if (ttype->is_base_type()) {
     return base_type_name((t_base_type*)ttype);
   } else if (ttype->is_enum()) {
-    return "int";
+    return cocoa_prefix_ + ttype->get_name();
   } else if (ttype->is_map()) {
     result = "NSMutableDictionary";
   } else if (ttype->is_set()) {
@@ -2804,4 +2863,8 @@ THRIFT_REGISTER_GENERATOR(
     "    log_unexpected:  Log every time an unexpected field ID or type is encountered.\n"
     "    validate_required:\n"
     "                     Throws exception if any required field is not set.\n"
-    "    fullcamel:       Convert underscored_accessor_or_service_names to camelCase.\n")
+    "    fullcamel:       Convert underscored_accessor_or_service_names to camelCase.\n"
+    "    base_class=CLS   Derive generated classes from class CLS instead of NSObject.\n"
+    "    base_import='MyBase.h'\n"
+    "                     Add an import line to generated code to find the base class.\n"
+    "                     (default is \"CLS.h\")\n")
