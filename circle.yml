@@ -1,10 +1,15 @@
 machine:
   java:
     version: oraclejdk8
-
+  php:
+    version: 5.5.11
 dependencies:
   pre:
-    - sudo apt-get update; sudo apt-get install build-essential mono-gmcs python-dev ant mono-devel libmono-system-web2.0-cil erlang-base autoconf automake pkg-config libtool bison flex libboost-dev  python-all python-all-dev python-all-dbg libboost-test-dev libevent-dev php5 php5-dev libglib2.0-dev libqt4-dev ruby ruby-dev
+    - sudo apt-get update; sudo apt-get install -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" build-essential mono-gmcs python-dev ant mono-devel libmono-system-web2.0-cil erlang-base autoconf automake pkg-config libtool bison flex libboost1.54-dev  python-all python-all-dev python-all-dbg libboost-test1.54-dev libevent-dev libglib2.0-dev libqt4-dev ruby ruby-dev
+
+test:
+  override:
+    - echo "No testing" || true
 
 deployment:
   production:

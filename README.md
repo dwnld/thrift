@@ -3,6 +3,11 @@ Apache Thrift
 
 Last Modified: 2014-03-16
 
+DWNLD Specific
+===============
+
+This is our fork of thrift that contains DWNLD specific patches that may not be merged into thrift proper. To build a new version of the thrift compiler, update debian/changelog and merge a PR into the dwnld branch.
+
 License
 =======
 
