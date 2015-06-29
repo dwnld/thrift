@@ -676,28 +676,30 @@ void t_cocoa_generator::generate_cocoa_struct_copy_with_zone_method(ofstream& ou
                                                                     t_struct* tstruct) {
   indent(out) << "- (id) copyWithZone: (NSZone *) zone" << endl;
   scope_up(out);
-  out << indent() << cocoa_prefix_ << tstruct->get_name()
-      << " *copy = [[[self class] allocWithZone: zone] init];" << endl;
+  indent(out) << cocoa_prefix_ << tstruct->get_name()
+              << " *copy = [[[self class] allocWithZone: zone] init];" << endl;
 
   const vector<t_field*>& members = tstruct->get_members();
   vector<t_field*>::const_iterator m_iter;
 
   for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
     t_type* t = get_true_type((*m_iter)->get_type());
-    out << indent() << "if (" << get_member_set_name((*m_iter)->get_name()) << ")" << endl;
+    indent(out) << "if (" << get_member_set_name((*m_iter)->get_name()) << ")" << endl;
     scope_up(out);
     if (type_can_be_null(t)) {
-      out << indent() << "copy->" << get_member_name((*m_iter)->get_name())
-          << " = [" << get_member_name((*m_iter)->get_name()) << " copyWithZone:zone];" << endl;
+      indent(out) << "copy->" << get_member_name((*m_iter)->get_name())
+                  << " = [" << get_member_name((*m_iter)->get_name())
+                  << " copyWithZone:zone];" << endl;
     } else {
-      out << indent() << "copy->" << get_member_name((*m_iter)->get_name())
-          << " = " << get_member_name((*m_iter)->get_name()) << ";" << endl;
+      indent(out) << "copy->" << get_member_name((*m_iter)->get_name())
+                  << " = " << get_member_name((*m_iter)->get_name())
+                  << ";" << endl;
     }
-    out << indent() << "copy->" << get_member_set_name((*m_iter)->get_name()) << " = YES;" << endl;
+    indent(out) << "copy->" << get_member_set_name((*m_iter)->get_name()) << " = YES;" << endl;
     scope_down(out);
   }
 
-  out << indent() << "return copy;" << endl;
+  indent(out) << "return copy;" << endl;
   scope_down(out);
   out << endl;
 }
