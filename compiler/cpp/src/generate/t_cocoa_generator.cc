@@ -684,16 +684,16 @@ void t_cocoa_generator::generate_cocoa_struct_copy_with_zone_method(ofstream& ou
 
   for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
     t_type* t = get_true_type((*m_iter)->get_type());
-    out << indent() << "if (__" << (*m_iter)->get_name() << "_isset)" << endl;
+    out << indent() << "if (" << get_member_set_name((*m_iter)->get_name()) << ")" << endl;
     scope_up(out);
     if (type_can_be_null(t)) {
-      out << indent() << "copy->__" << (*m_iter)->get_name()
-          << " = [__" << (*m_iter)->get_name() << " copyWithZone:zone];" << endl;
+      out << indent() << "copy->" << get_member_name((*m_iter)->get_name())
+          << " = [" << get_member_name((*m_iter)->get_name()) << " copyWithZone:zone];" << endl;
     } else {
-      out << indent() << "copy->__" << (*m_iter)->get_name()
-          << " = __" << (*m_iter)->get_name() << ";" << endl;
+      out << indent() << "copy->" << get_member_name((*m_iter)->get_name())
+          << " = " << get_member_name((*m_iter)->get_name()) << ";" << endl;
     }
-    out << indent() << "copy->__" << (*m_iter)->get_name() << "_isset = YES;" << endl;
+    out << indent() << "copy->" << get_member_set_name((*m_iter)->get_name()) << " = YES;" << endl;
     scope_down(out);
   }
 
@@ -864,7 +864,7 @@ void t_cocoa_generator::generate_cocoa_struct_implementation(ofstream& out,
       } else {
         out << getter_name << ";" << endl;
       }
-      out << indent() << get_member_set_name((*m_iter)->get_name()) << "= YES;" << endl;
+      out << indent() << get_member_set_name((*m_iter)->get_name()) << " = YES;" << endl;
     }
 
     out << indent() << "return self;" << endl;
