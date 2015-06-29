@@ -108,6 +108,7 @@ public:
   void generate_cocoa_struct_encode_with_coder_method(ofstream& out,
                                                       t_struct* tstruct,
                                                       bool is_exception);
+  void generate_cocoa_struct_copy_with_zone_method(ofstream& out, t_struct* tstruct);
   void generate_cocoa_struct_hash_method(ofstream& out, t_struct* tstruct);
   void generate_cocoa_struct_is_equal_method(ofstream& out, t_struct* tstruct);
   void generate_cocoa_struct_field_accessor_declarations(std::ofstream& out,
@@ -310,7 +311,7 @@ void t_cocoa_generator::generate_typedef(t_typedef* ttypedef) {
  * @param tenum The enumeration
  */
 void t_cocoa_generator::generate_enum(t_enum* tenum) {
-  f_header_ << indent() << "enum " << cocoa_prefix_ << tenum->get_name() << " {" << endl;
+  f_header_ << indent() << "typedef NS_ENUM(int, " << cocoa_prefix_ << tenum->get_name() << ") {" << endl;
   indent_up();
 
   vector<t_enum_value*> constants = tenum->get_constants();
@@ -322,7 +323,7 @@ void t_cocoa_generator::generate_enum(t_enum* tenum) {
     } else {
       f_header_ << "," << endl;
     }
-    f_header_ << indent() << tenum->get_name() << "_" << (*c_iter)->get_name();
+    f_header_ << indent() << cocoa_prefix_ << tenum->get_name() << "_" << (*c_iter)->get_name();
     f_header_ << " = " << (*c_iter)->get_value();
   }
 
@@ -439,7 +440,7 @@ void t_cocoa_generator::generate_cocoa_struct_interface(ofstream& out,
   } else {
     out << "NSObject ";
   }
-  out << "<TBase, NSCoding> ";
+  out << "<TBase, NSCoding, NSCopying> ";
 
   scope_up(out);
 
@@ -668,6 +669,42 @@ void t_cocoa_generator::generate_cocoa_struct_encode_with_coder_method(ofstream&
 }
 
 /**
+ * Generate the copyWithZone method for this struct so it's compatible with
+ * the NSCopying protocol
+ */
+void t_cocoa_generator::generate_cocoa_struct_copy_with_zone_method(ofstream& out,
+                                                                    t_struct* tstruct) {
+  indent(out) << "- (id) copyWithZone: (NSZone *) zone" << endl;
+  scope_up(out);
+  indent(out) << cocoa_prefix_ << tstruct->get_name()
+              << " *copy = [[[self class] allocWithZone: zone] init];" << endl;
+
+  const vector<t_field*>& members = tstruct->get_members();
+  vector<t_field*>::const_iterator m_iter;
+
+  for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
+    t_type* t = get_true_type((*m_iter)->get_type());
+    indent(out) << "if (" << get_member_set_name((*m_iter)->get_name()) << ")" << endl;
+    scope_up(out);
+    if (type_can_be_null(t)) {
+      indent(out) << "copy->" << get_member_name((*m_iter)->get_name())
+                  << " = [" << get_member_name((*m_iter)->get_name())
+                  << " copyWithZone:zone];" << endl;
+    } else {
+      indent(out) << "copy->" << get_member_name((*m_iter)->get_name())
+                  << " = " << get_member_name((*m_iter)->get_name())
+                  << ";" << endl;
+    }
+    indent(out) << "copy->" << get_member_set_name((*m_iter)->get_name()) << " = YES;" << endl;
+    scope_down(out);
+  }
+
+  indent(out) << "return copy;" << endl;
+  scope_down(out);
+  out << endl;
+}
+
+/**
  * Generate the hash method for this struct
  */
 void t_cocoa_generator::generate_cocoa_struct_hash_method(ofstream& out, t_struct* tstruct) {
@@ -829,7 +866,7 @@ void t_cocoa_generator::generate_cocoa_struct_implementation(ofstream& out,
       } else {
         out << getter_name << ";" << endl;
       }
-      out << indent() << get_member_set_name((*m_iter)->get_name()) << "= YES;" << endl;
+      out << indent() << get_member_set_name((*m_iter)->get_name()) << " = YES;" << endl;
     }
 
     out << indent() << "return self;" << endl;
@@ -841,6 +878,8 @@ void t_cocoa_generator::generate_cocoa_struct_implementation(ofstream& out,
   generate_cocoa_struct_init_with_coder_method(out, tstruct, is_exception);
   // encodeWithCoder for NSCoding
   generate_cocoa_struct_encode_with_coder_method(out, tstruct, is_exception);
+  // copyWithZone for NSCopying
+  generate_cocoa_struct_copy_with_zone_method(out, tstruct);
   // hash and isEqual for NSObject
   generate_cocoa_struct_hash_method(out, tstruct);
   generate_cocoa_struct_is_equal_method(out, tstruct);
@@ -2285,7 +2324,7 @@ string t_cocoa_generator::type_name(t_type* ttype, bool class_ref) {
   if (ttype->is_base_type()) {
     return base_type_name((t_base_type*)ttype);
   } else if (ttype->is_enum()) {
-    return "int";
+    return cocoa_prefix_ + ttype->get_name();
   } else if (ttype->is_map()) {
     result = "NSMutableDictionary";
   } else if (ttype->is_set()) {
